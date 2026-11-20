@@ -1,66 +1,339 @@
 ---
 import Base from '../layouts/Base.astro';
 import spots from '../data/spots.json';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
-<Base title="日本地圖" description="影片提到的景點，標在大致正確的地理位置，可縮放拖曳。">
+<Base title="日本地圖" description="3D 立體日本地圖，影片提到的景點依經緯度自動定位，可旋轉縮放。">
   <h1>日本地圖</h1>
-  <p>影片提到的景點會標在這張地圖上，可以縮放、拖曳，點圓點看說明。位置為大致座標。</p>
+  <p class="lead">拖曳旋轉、滾輪或雙指縮放、右鍵（或雙指）平移，點旗子看說明。景點依 Google 地圖經緯度自動定位。</p>
   <div class="legend">
-    <span><i style="background:#c0392b"></i>日本之最</span>
-    <span><i style="background:#2471a3"></i>行程攻略</span>
-    <span><i style="background:#d68910"></i>1000個問題</span>
+    <span><i style="background:#d9453b"></i>日本之最</span>
+    <span><i style="background:#2f7dbf"></i>行程攻略</span>
+    <span><i style="background:#e39b21"></i>1000個問題</span>
   </div>
-  <div id="map" role="application" aria-label="日本景點地圖"></div>
+  <div class="j3d" id="j3d" data-geo={`${base}/japan-prefectures.json`}>
+    <div class="j3d-loading" id="j3d-loading">正在把日本組起來…</div>
+    <div class="j3d-ctrl">
+      <button type="button" data-z="in" aria-label="放大">＋</button>
+      <button type="button" data-z="out" aria-label="縮小">－</button>
+      <button type="button" data-z="reset" aria-label="回到全日本">全</button>
+    </div>
+    <div class="j3d-card" id="j3d-card" hidden></div>
+  </div>
+  <ul class="spot-list" id="spot-list"></ul>
+  <p class="credit">地圖資料：Natural Earth（公有領域）。3D 繪製：three.js。</p>
   <script id="spots-data" type="application/json" set:html={JSON.stringify(spots)} />
-  <noscript><p>地圖需要啟用 JavaScript。</p></noscript>
 </Base>
 
 <style is:global>
-  #map { height: 70vh; min-height: 420px; border-radius: 8px; border: 1px solid #ddd; margin: 1rem 0; }
+  .j3d { position: relative; height: 74vh; min-height: 460px; margin: 1rem 0; border-radius: 14px; overflow: hidden; background: linear-gradient(#cfe7ec, #b9dbe2); touch-action: none; }
+  .j3d canvas { display: block; }
+  .j3d-loading { position: absolute; inset: 0; display: grid; place-items: center; color: #4a6a70; font-weight: 700; }
+  .j3d-ctrl { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 6px; z-index: 3; }
+  .j3d-ctrl button { width: 38px; height: 38px; border: none; border-radius: 10px; background: #fffaf2; box-shadow: 0 2px 6px rgba(0,0,0,.15); font: 700 16px 'Noto Sans TC', sans-serif; cursor: pointer; }
+  .j3d-card { position: absolute; left: 12px; bottom: 12px; max-width: 300px; background: #fffaf2; border-radius: 12px; padding: .8rem 1rem; box-shadow: 0 4px 14px rgba(0,0,0,.18); z-index: 3; }
+  .j3d-card strong { display: block; font-size: 1.05rem; margin: .2rem 0; }
+  .j3d-card .tag { display: inline-block; font-size: .75rem; color: #fff; border-radius: 4px; padding: 0 .4rem; }
+  .j3d-label { font: 700 12px 'Noto Sans TC', sans-serif; color: #2b2b2b; background: #fffaf2; border-radius: 999px; padding: 2px 9px; box-shadow: 0 1px 4px rgba(0,0,0,.2); white-space: nowrap; cursor: pointer; user-select: none; }
+  .j3d-label b { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+  .j3d-pref { font: 600 11px 'Noto Sans TC', sans-serif; color: #7b6a52; text-shadow: 0 0 3px #fff, 0 0 3px #fff; pointer-events: none; white-space: nowrap; }
   .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .9rem; }
   .legend i { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; margin-right: .3rem; vertical-align: middle; }
+  .spot-list { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: .5rem; }
+  .spot-list button { border: 1px solid #ddd; background: #fff; border-radius: 999px; padding: .3rem .8rem; cursor: pointer; font: inherit; }
+  .credit { font-size: .8rem; color: #888; }
 </style>
 
 <script>
-  import L from 'leaflet';
-  import 'leaflet/dist/leaflet.css';
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+  import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
-  const spots = JSON.parse(document.getElementById('spots-data')!.textContent || '[]');
-  const colors: Record<string, string> = { '日本之最': '#c0392b', '行程攻略': '#2471a3', '1000個問題': '#d68910' };
+  const COLORS: Record<string, string> = { '日本之最': '#d9453b', '行程攻略': '#2f7dbf', '1000個問題': '#e39b21' };
+  // 依地方區分的柔和配色（低多邊形可愛風）
+  const REGION: [string, string[]][] = [
+    ['#cfe3b4', ['Hokkaido', 'Hokkaidō']],
+    ['#e7dcb0', ['Aomori', 'Iwate', 'Miyagi', 'Akita', 'Yamagata', 'Fukushima']],
+    ['#f2d7b6', ['Ibaraki', 'Tochigi', 'Gunma', 'Saitama', 'Chiba', 'Tokyo', 'Tōkyō', 'Kanagawa']],
+    ['#dfe6b8', ['Niigata', 'Toyama', 'Ishikawa', 'Fukui', 'Yamanashi', 'Nagano', 'Gifu', 'Shizuoka', 'Aichi']],
+    ['#efd9bd', ['Mie', 'Shiga', 'Kyoto', 'Kyōto', 'Osaka', 'Ōsaka', 'Hyogo', 'Hyōgo', 'Nara', 'Wakayama']],
+    ['#d9e2c3', ['Tottori', 'Shimane', 'Okayama', 'Hiroshima', 'Yamaguchi']],
+    ['#ead9b8', ['Tokushima', 'Kagawa', 'Ehime', 'Kochi', 'Kōchi']],
+    ['#e3d4bd', ['Fukuoka', 'Saga', 'Nagasaki', 'Kumamoto', 'Oita', 'Ōita', 'Miyazaki', 'Kagoshima']],
+    ['#f3dcc4', ['Okinawa']],
+  ];
+  const regionColor = (n: string) => REGION.find(([, ns]) => ns.includes(n))?.[0] ?? '#e8dcc0';
 
-  const map = L.map('map', { minZoom: 4, maxZoom: 17 }).setView([36.2, 137.5], 5);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  }).addTo(map);
-
-  // 從 Google 地圖複製的座標（例如「34.9949, 135.7850」）直接貼進 gmap 欄位即可
+  // Google 地圖複製的座標「34.9949, 135.7850」直接貼進 gmap 即可
   function toLatLng(s: any): [number, number] | null {
     if (typeof s.lat === 'number' && typeof s.lng === 'number') return [s.lat, s.lng];
-    const nums = String(s.gmap || '').match(/-?\d+(?:\.\d+)?/g);
-    if (!nums || nums.length < 2) return null;
-    const lat = parseFloat(nums[0]), lng = parseFloat(nums[1]);
-    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
-    return [lat, lng];
+    const n = String(s.gmap || '').match(/-?\d+(?:\.\d+)?/g);
+    if (!n || n.length < 2) return null;
+    const lat = +n[0], lng = +n[1];
+    return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? [lat, lng] : null;
+  }
+  // 經緯度 → 平面座標（等距圓柱投影，以北緯 36 度校正比例）
+  const LNG0 = 137.5, LAT0 = 36, KX = Math.cos((LAT0 * Math.PI) / 180);
+  const px = (lng: number) => (lng - LNG0) * KX;
+  const pz = (lat: number) => -(lat - LAT0);
+
+  const spots: any[] = JSON.parse(document.getElementById('spots-data')!.textContent || '[]');
+  const wrap = document.getElementById('j3d')!;
+  const card = document.getElementById('j3d-card')!;
+
+  function webglOK() {
+    try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
   }
 
-  const pts: L.LatLngExpression[] = [];
-  for (const s of spots) {
-    const ll = toLatLng(s);
-    if (!ll) { console.warn('座標格式錯誤，略過：', s.name); continue; }
-    const color = colors[s.track] || '#555';
-    const m = L.circleMarker(ll, {
-      radius: 9, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95,
-    }).addTo(map);
-    const el = document.createElement('div');
-    const b = document.createElement('strong');
-    b.textContent = s.name;
-    const p = document.createElement('div');
-    p.textContent = s.note + (s.qid ? `（${s.qid}）` : '');
-    el.append(b, p);
-    m.bindPopup(el);
-    m.bindTooltip(s.name);
-    pts.push(ll);
+  if (!webglOK()) {
+    document.getElementById('j3d-loading')!.textContent = '你的瀏覽器不支援 3D 顯示，請使用下方清單。';
+  } else {
+    init();
   }
-  if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(0.3), { maxZoom: 9 });
+
+  async function init() {
+    const geo = await fetch(wrap.dataset.geo!).then((r) => r.json());
+    const W = () => wrap.clientWidth, H = () => wrap.clientHeight;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: location.search.includes('shot') });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(W(), H());
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    wrap.prepend(renderer.domElement);
+    const labelR = new CSS2DRenderer();
+    labelR.setSize(W(), H());
+    Object.assign(labelR.domElement.style, { position: 'absolute', top: '0', left: '0', pointerEvents: 'none' });
+    wrap.append(labelR.domElement);
+    document.getElementById('j3d-loading')!.remove();
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0xbfdde3, 55, 110);
+    const camera = new THREE.PerspectiveCamera(35, W() / H(), 0.05, 200);
+
+    scene.add(new THREE.HemisphereLight(0xfff6e8, 0x8fb7bd, 1.6));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.9);
+    sun.position.set(-12, 22, 14);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 70 });
+    scene.add(sun);
+
+    // 海面與淺灘
+    const sea = new THREE.Mesh(new THREE.CircleGeometry(80, 64), new THREE.MeshStandardMaterial({ color: 0x9fd0d8, roughness: 0.9 }));
+    sea.rotation.x = -Math.PI / 2; sea.receiveShadow = true; scene.add(sea);
+
+    // 有景點的縣要上色
+    const placed = spots.map((s) => ({ s, ll: toLatLng(s) })).filter((x) => x.ll) as { s: any; ll: [number, number] }[];
+    const inRing = (ring: number[][], lng: number, lat: number) => {
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i], [xj, yj] = ring[j];
+        if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+      }
+      return inside;
+    };
+    const prefOf = (lat: number, lng: number) => geo.features.find((f: any) => f.geometry.coordinates.some((p: any) => inRing(p[0], lng, lat)));
+
+    const H_LAND = 0.22, H_HOT = 0.34;
+    const hot = new Set(placed.map((p) => prefOf(p.ll[0], p.ll[1])?.properties.name).filter(Boolean));
+    const prefLabels: CSS2DObject[] = [];
+    const land = new THREE.Group(); scene.add(land);
+
+    for (const f of geo.features) {
+      const name = f.properties.name;
+      const isHot = hot.has(name);
+      const shapes: THREE.Shape[] = [];
+      let big: { area: number; c: [number, number] } = { area: 0, c: [0, 0] };
+      for (const poly of f.geometry.coordinates) {
+        const ring = poly[0].map(([lng, lat]: number[]) => new THREE.Vector2(px(lng), -pz(lat)));
+        // 小於約 10 平方公里的小島不畫，避免變成一根根細柱子
+        if (Math.abs(THREE.ShapeUtils.area(ring)) < 0.0008) continue;
+        const sh = new THREE.Shape(ring);
+        for (const hole of poly.slice(1)) sh.holes.push(new THREE.Path(hole.map(([lng, lat]: number[]) => new THREE.Vector2(px(lng), -pz(lat)))));
+        shapes.push(sh);
+        const area = Math.abs(THREE.ShapeUtils.area(ring));
+        if (area > big.area) {
+          const c = ring.reduce((a: number[], v: THREE.Vector2) => [a[0] + v.x, a[1] + v.y], [0, 0]);
+          big = { area, c: [c[0] / ring.length, c[1] / ring.length] };
+        }
+      }
+      const depth = isHot ? H_HOT : H_LAND;
+      const g = new THREE.ExtrudeGeometry(shapes, { depth, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.012, bevelSegments: 1 });
+      g.rotateX(-Math.PI / 2);
+      const color = new THREE.Color(isHot ? '#f08a6c' : regionColor(name));
+      const top = new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true });
+      const side = new THREE.MeshStandardMaterial({ color: color.clone().multiplyScalar(0.78), roughness: 0.9, flatShading: true });
+      const mesh = new THREE.Mesh(g, [top, side]);
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      mesh.userData.name = name;
+      land.add(mesh);
+
+      const el = document.createElement('div'); el.className = 'j3d-pref';
+      el.textContent = f.properties.ja || f.properties.zh || name;
+      const lab = new CSS2DObject(el);
+      lab.position.set(big.c[0], depth + 0.05, -big.c[1]);
+      prefLabels.push(lab); scene.add(lab);
+    }
+
+    // 小樹（隨機撒在陸地上，營造島嶼感）
+    const treeGeo = new THREE.ConeGeometry(0.028, 0.09, 5); treeGeo.translate(0, 0.045, 0);
+    const trees = new THREE.InstancedMesh(treeGeo, new THREE.MeshStandardMaterial({ color: 0x7fae6a, flatShading: true }), 1600);
+    trees.castShadow = true;
+    let nTree = 0; const m4 = new THREE.Matrix4(); let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let tries = 0; tries < 20000 && nTree < 1600; tries++) {
+      const lng = 129 + rnd() * 17, lat = 31 + rnd() * 14.5;
+      const f = prefOf(lat, lng);
+      if (!f || hot.has(f.properties.name)) continue;
+      const sc = 0.7 + rnd() * 0.7;
+      m4.compose(new THREE.Vector3(px(lng), H_LAND + 0.02, pz(lat)), new THREE.Quaternion(), new THREE.Vector3(sc, sc, sc));
+      trees.setMatrixAt(nTree++, m4);
+    }
+    trees.count = nTree; scene.add(trees);
+
+    // 飄浮的雲
+    const clouds: THREE.Group[] = [];
+    const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, transparent: true, opacity: 0.92 });
+    // 雲只放在海上，不擋住陸地
+    const seaSpots = [[-7, -6], [6, -8], [8, 2], [-9, 3], [4, 8], [-4, 9]];
+    for (const [cx, cz] of seaSpots) {
+      const c = new THREE.Group();
+      for (let j = 0; j < 4; j++) {
+        const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22 + rnd() * 0.18, 0), cloudMat);
+        b.position.set(j * 0.28 - 0.42, rnd() * 0.1, rnd() * 0.2); c.add(b);
+      }
+      c.position.set(cx, 2.4 + rnd() * 0.8, cz);
+      c.castShadow = true; c.traverse((o: any) => { if (o.isMesh) o.castShadow = true; });
+      clouds.push(c); scene.add(c);
+    }
+
+    // 景點旗子
+    const pins: { obj: THREE.Group; s: any; ll: [number, number]; base: number }[] = [];
+    const pinHit: THREE.Object3D[] = [];
+    const pinLabels: CSS2DObject[] = [];
+    for (const p of placed) {
+      const pref = prefOf(p.ll[0], p.ll[1]);
+      const baseY = pref ? (hot.has(pref.properties.name) ? H_HOT : H_LAND) + 0.03 : 0.02;
+      const col = new THREE.Color(COLORS[p.s.track] || '#555');
+      const grp = new THREE.Group();
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.36, 6), new THREE.MeshStandardMaterial({ color: 0x6b5a45 }));
+      pole.position.y = 0.18; grp.add(pole);
+      const flagShape = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0.17, -0.055), new THREE.Vector2(0, -0.11)]);
+      const flag = new THREE.Mesh(new THREE.ExtrudeGeometry(flagShape, { depth: 0.012, bevelEnabled: false }), new THREE.MeshStandardMaterial({ color: col, flatShading: true }));
+      flag.position.set(0.008, 0.36, -0.006); grp.add(flag);
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), new THREE.MeshStandardMaterial({ color: 0xfff2d6 }));
+      knob.position.y = 0.37; grp.add(knob);
+      const hit = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
+      hit.position.y = 0.25; hit.userData.spot = p.s; grp.add(hit); pinHit.push(hit);
+      grp.traverse((o: any) => { if (o.isMesh) o.castShadow = true; });
+      grp.position.set(px(p.ll[1]), baseY, pz(p.ll[0]));
+      scene.add(grp);
+
+      const el = document.createElement('div'); el.className = 'j3d-label';
+      const dot = document.createElement('b'); dot.style.background = COLORS[p.s.track] || '#555';
+      el.append(dot, document.createTextNode(p.s.name));
+      el.style.pointerEvents = 'auto';
+      el.addEventListener('click', (e) => { e.stopPropagation(); focusSpot(p); });
+      const lab = new CSS2DObject(el); lab.position.set(0, 0.5, 0); grp.add(lab); pinLabels.push(lab);
+      pins.push({ obj: grp, s: p.s, ll: p.ll, base: baseY });
+    }
+
+    // 鏡頭控制
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; controls.dampingFactor = 0.08;
+    controls.minDistance = 1.2; controls.maxDistance = 60;
+    controls.maxPolarAngle = 1.25; controls.screenSpacePanning = false;
+    // 手機直式畫面較窄，把鏡頭拉遠一點才看得到整個日本
+    const homeTarget = new THREE.Vector3(px(137.2), 0, pz(36.6));
+    const homeOffset = new THREE.Vector3(-1.5, 15, 18).multiplyScalar(Math.max(1, 1.15 / camera.aspect));
+    const HOME = { target: homeTarget, pos: homeTarget.clone().add(homeOffset) };
+    camera.position.copy(HOME.pos); controls.target.copy(HOME.target); controls.update();
+
+    let anim: { t0: number; dur: number; fp: THREE.Vector3; ft: THREE.Vector3; tp: THREE.Vector3; tt: THREE.Vector3 } | null = null;
+    function flyTo(tp: THREE.Vector3, tt: THREE.Vector3, dur = 900) {
+      anim = { t0: performance.now(), dur, fp: camera.position.clone(), ft: controls.target.clone(), tp, tt };
+    }
+    function focusSpot(p: { s: any; ll: [number, number] }, dur = 900) {
+      const t = new THREE.Vector3(px(p.ll[1]), 0.2, pz(p.ll[0]));
+      flyTo(t.clone().add(new THREE.Vector3(-0.4, 2.6, 2.2)), t, dur);
+      show(p.s);
+    }
+    function show(s: any) {
+      card.replaceChildren();
+      const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = s.track; tag.style.background = COLORS[s.track] || '#555';
+      const b = document.createElement('strong'); b.textContent = s.name;
+      const p = document.createElement('div'); p.textContent = s.note + (s.qid ? `（${s.qid}）` : '');
+      card.append(tag, b, p); card.hidden = false;
+    }
+
+    wrap.querySelectorAll<HTMLButtonElement>('.j3d-ctrl button').forEach((b) => b.addEventListener('click', () => {
+      const dir = camera.position.clone().sub(controls.target);
+      if (b.dataset.z === 'reset') { flyTo(HOME.pos.clone(), HOME.target.clone()); card.hidden = true; return; }
+      const f = b.dataset.z === 'in' ? 0.55 : 1.8;
+      const len = THREE.MathUtils.clamp(dir.length() * f, controls.minDistance, controls.maxDistance);
+      flyTo(controls.target.clone().add(dir.setLength(len)), controls.target.clone(), 450);
+    }));
+
+    // 點擊旗子
+    const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+    let down: [number, number] = [0, 0];
+    renderer.domElement.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
+    renderer.domElement.addEventListener('pointerup', (e) => {
+      if (Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
+      const r = renderer.domElement.getBoundingClientRect();
+      mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      ray.setFromCamera(mouse, camera);
+      const hit = ray.intersectObjects(pinHit, false)[0];
+      if (hit) { const p = pins.find((q) => q.s === hit.object.userData.spot)!; focusSpot(p); }
+      else card.hidden = true;
+    });
+
+    const list = document.getElementById('spot-list')!;
+    for (const p of pins) {
+      const li = document.createElement('li'); const btn = document.createElement('button');
+      btn.textContent = p.s.name; btn.addEventListener('click', () => { focusSpot(p); wrap.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+      li.append(btn); list.append(li);
+    }
+
+    // 網址加 #景點名稱 會直接飛到該景點，例如 /map/#清水寺
+    const want = decodeURIComponent(location.hash.slice(1));
+    const hitSpot = pins.find((p) => p.s.name === want);
+    if (hitSpot) focusSpot(hitSpot, 0);
+
+    new ResizeObserver(() => {
+      renderer.setSize(W(), H()); labelR.setSize(W(), H());
+      camera.aspect = W() / H(); camera.updateProjectionMatrix();
+    }).observe(wrap);
+
+    const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+    renderer.setAnimationLoop((now) => {
+      if (anim) {
+        const t = anim.dur ? Math.min(1, (now - anim.t0) / anim.dur) : 1, k = ease(t);
+        camera.position.lerpVectors(anim.fp, anim.tp, k);
+        controls.target.lerpVectors(anim.ft, anim.tt, k);
+        if (t >= 1) anim = null;
+      }
+      controls.update();
+      const dist = camera.position.distanceTo(controls.target);
+      // 縣名只在拉近時出現，景點標籤在很遠時縮小
+      for (const l of prefLabels) l.visible = dist < 9;
+      for (const c of clouds) { c.position.x += 0.0015; if (c.position.x > 14) c.position.x = -14; c.visible = dist > 6; }
+      for (const p of pins) {
+        p.obj.position.y = p.base + Math.sin(now / 600 + p.ll[1]) * 0.015;
+        const s = THREE.MathUtils.clamp(dist / 8, 0.6, 3.2);
+        p.obj.scale.setScalar(s);
+      }
+      renderer.render(scene, camera);
+      labelR.render(scene, camera);
+      // 標籤重疊時，只留一個（避免京都幾個點擠在一起）
+      const boxes: DOMRect[] = [];
+      for (const l of pinLabels) {
+        l.element.style.visibility = 'visible';
+        const r = l.element.getBoundingClientRect();
+        if (boxes.some((b) => r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top)) l.element.style.visibility = 'hidden';
+        else boxes.push(r);
+      }
+    });
+  }
 </script>
