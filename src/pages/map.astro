@@ -1,0 +1,54 @@
+---
+import Base from '../layouts/Base.astro';
+import spots from '../data/spots.json';
+---
+<Base title="日本地圖" description="影片提到的景點，標在大致正確的地理位置，可縮放拖曳。">
+  <h1>日本地圖</h1>
+  <p>影片提到的景點會標在這張地圖上，可以縮放、拖曳，點圓點看說明。位置為大致座標。</p>
+  <div class="legend">
+    <span><i style="background:#c0392b"></i>日本之最</span>
+    <span><i style="background:#2471a3"></i>行程攻略</span>
+    <span><i style="background:#d68910"></i>1000個問題</span>
+  </div>
+  <div id="map" role="application" aria-label="日本景點地圖"></div>
+  <script id="spots-data" type="application/json" set:html={JSON.stringify(spots)} />
+  <noscript><p>地圖需要啟用 JavaScript。</p></noscript>
+</Base>
+
+<style is:global>
+  #map { height: 70vh; min-height: 420px; border-radius: 8px; border: 1px solid #ddd; margin: 1rem 0; }
+  .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .9rem; }
+  .legend i { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; margin-right: .3rem; vertical-align: middle; }
+</style>
+
+<script>
+  import L from 'leaflet';
+  import 'leaflet/dist/leaflet.css';
+
+  const spots = JSON.parse(document.getElementById('spots-data')!.textContent || '[]');
+  const colors: Record<string, string> = { '日本之最': '#c0392b', '行程攻略': '#2471a3', '1000個問題': '#d68910' };
+
+  const map = L.map('map', { minZoom: 4, maxZoom: 17 }).setView([36.2, 137.5], 5);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(map);
+
+  const pts: L.LatLngExpression[] = [];
+  for (const s of spots) {
+    const color = colors[s.track] || '#555';
+    const m = L.circleMarker([s.lat, s.lng], {
+      radius: 9, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95,
+    }).addTo(map);
+    const el = document.createElement('div');
+    const b = document.createElement('strong');
+    b.textContent = s.name;
+    const p = document.createElement('div');
+    p.textContent = s.note + (s.qid ? `（${s.qid}）` : '');
+    el.append(b, p);
+    m.bindPopup(el);
+    m.bindTooltip(s.name);
+    pts.push([s.lat, s.lng]);
+  }
+  if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(0.3), { maxZoom: 9 });
+</script>
