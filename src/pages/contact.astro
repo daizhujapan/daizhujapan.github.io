@@ -1,0 +1,14 @@
+---
+import Base from '../layouts/Base.astro';
+import site from '../data/site.json';
+---
+<Base title="聯絡" description="想問的日本問題，歡迎留言或來信。">
+  <h1>聯絡</h1>
+  <p>想知道的日本問題，歡迎到影片下方留言，或在 Threads、Instagram 私訊我，會優先排進問題庫。</p>
+  <ul>
+    <li><a href={site.links.youtube}>YouTube</a></li>
+    <li><a href={site.links.instagram}>Instagram</a></li>
+    <li><a href={site.links.threads}>Threads</a></li>
+    {site.contactEmail && <li>Email：{site.contactEmail}</li>}
+  </ul>
+</Base>
