@@ -34,10 +34,22 @@ import spots from '../data/spots.json';
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
 
+  // 從 Google 地圖複製的座標（例如「34.9949, 135.7850」）直接貼進 gmap 欄位即可
+  function toLatLng(s: any): [number, number] | null {
+    if (typeof s.lat === 'number' && typeof s.lng === 'number') return [s.lat, s.lng];
+    const nums = String(s.gmap || '').match(/-?\d+(?:\.\d+)?/g);
+    if (!nums || nums.length < 2) return null;
+    const lat = parseFloat(nums[0]), lng = parseFloat(nums[1]);
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return [lat, lng];
+  }
+
   const pts: L.LatLngExpression[] = [];
   for (const s of spots) {
+    const ll = toLatLng(s);
+    if (!ll) { console.warn('座標格式錯誤，略過：', s.name); continue; }
     const color = colors[s.track] || '#555';
-    const m = L.circleMarker([s.lat, s.lng], {
+    const m = L.circleMarker(ll, {
       radius: 9, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95,
     }).addTo(map);
     const el = document.createElement('div');
@@ -48,7 +60,7 @@ import spots from '../data/spots.json';
     el.append(b, p);
     m.bindPopup(el);
     m.bindTooltip(s.name);
-    pts.push([s.lat, s.lng]);
+    pts.push(ll);
   }
   if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(0.3), { maxZoom: 9 });
 </script>
