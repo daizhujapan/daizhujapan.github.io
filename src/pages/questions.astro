@@ -1,0 +1,24 @@
+---
+import Base from '../layouts/Base.astro';
+import questions from '../data/questions.json';
+---
+<Base title="問題庫" description="日本旅行問題庫，每支影片對應一題。">
+  <h1>問題庫</h1>
+  <p>每支影片回答其中一題。要新增題目，只要改 <code>src/data/questions.json</code>。</p>
+  <table>
+    <thead>
+      <tr><th>編號</th><th>問題</th><th>主線</th><th>狀態</th><th>影片</th></tr>
+    </thead>
+    <tbody>
+      {questions.map((q) => (
+        <tr>
+          <td>{q.id}</td>
+          <td>{q.title}</td>
+          <td>{q.track}</td>
+          <td>{q.status}</td>
+          <td>{q.video ? <a href={q.video}>觀看</a> : '—'}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</Base>
