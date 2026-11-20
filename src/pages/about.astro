@@ -1,0 +1,15 @@
+---
+import Base from '../layouts/Base.astro';
+import site from '../data/site.json';
+---
+<Base title="關於" description="關於大豆與這個頻道。">
+  <h1>關於</h1>
+  <p>我是大豆，原本在做 MLB 數據分析的 YouTube 頻道，現在把日本也慢慢玩懂。</p>
+  <p>{site.name}的做法：從查證過的「日本之最」出發，延伸到可以照著走的行程、交通與票價攻略。每支影片的資料來源都放在說明欄與網站文章。</p>
+  <h2>查證原則</h2>
+  <ul>
+    <li>每個「最」都要有官方或可靠來源。</li>
+    <li>只有媒體報導的紀錄，不會說成「日本第一」。</li>
+    <li>圖片只用授權明確的素材，出處會標示。</li>
+  </ul>
+</Base>
