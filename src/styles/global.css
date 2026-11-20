@@ -1,0 +1,64 @@
+:root {
+  --red: #c8372d;
+  --paper: #f6f1e7;
+  --ink: #1f1f1f;
+  --indigo: #2b4c7e;
+  --line: #ddd5c4;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
+  line-height: 1.7;
+}
+
+h1, h2, h3 {
+  font-family: 'Noto Serif TC', 'PMingLiU', serif;
+  line-height: 1.3;
+}
+
+a { color: var(--indigo); }
+a:hover { color: var(--red); }
+
+.wrap { max-width: 860px; margin: 0 auto; padding: 0 20px; }
+
+header.site {
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+header.site .wrap {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px; padding-top: 14px; padding-bottom: 14px;
+}
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font-weight: 700; }
+.brand .mark {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--red); color: #fff;
+  display: grid; place-items: center; font-family: 'Noto Serif TC', serif; font-size: 20px;
+}
+nav a { margin-left: 16px; text-decoration: none; color: var(--ink); }
+nav a:hover { color: var(--red); }
+
+main { padding: 36px 0 60px; }
+
+.hero h1 { font-size: 2.2rem; margin: 0 0 8px; }
+.hero p { font-size: 1.15rem; margin: 0 0 20px; }
+
+.cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); margin-top: 24px; }
+.card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.card h3 { margin: 0 0 6px; }
+.tag { display: inline-block; font-size: .8rem; padding: 1px 8px; border-radius: 999px; background: var(--red); color: #fff; }
+.tag.alt { background: var(--indigo); }
+
+table { border-collapse: collapse; width: 100%; background: #fff; }
+th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; }
+th { background: #efe8d8; }
+
+.btn { display: inline-block; background: var(--red); color: #fff; padding: 8px 16px; border-radius: 8px; text-decoration: none; margin-right: 8px; }
+.btn:hover { color: #fff; opacity: .9; }
+
+footer.site { border-top: 1px solid var(--line); padding: 20px 0 40px; font-size: .9rem; }
