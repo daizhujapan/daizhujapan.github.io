@@ -1,24 +1,77 @@
 ---
 import Base from '../layouts/Base.astro';
 import questions from '../data/questions.json';
+
+const count = (key: 'type' | 'area') => {
+  const m = new Map<string, number>();
+  for (const q of questions) m.set(q[key], (m.get(q[key]) ?? 0) + 1);
+  return [...m.entries()].sort((a, b) => b[1] - a[1]);
+};
+const types = count('type');
+const areas = count('area');
+const done = questions.filter((q) => q.status === '已上片').length;
+const ym = (d: string) => d.slice(0, 7).replace('-', '/');
 ---
-<Base title="問題庫" description="日本旅行問題庫，每支影片對應一題。">
-  <h1>問題庫</h1>
-  <p>每支影片回答其中一題。要新增題目，只要改 <code>src/data/questions.json</code>。</p>
-  <table>
-    <thead>
-      <tr><th>編號</th><th>問題</th><th>主線</th><th>狀態</th><th>影片</th></tr>
-    </thead>
-    <tbody>
-      {questions.map((q) => (
-        <tr>
-          <td>{q.id}</td>
-          <td>{q.title}</td>
-          <td>{q.track}</td>
-          <td>{q.status}</td>
-          <td>{q.video ? <a href={q.video}>觀看</a> : '—'}</td>
-        </tr>
-      ))}
-    </tbody>
-  </table>
+<Base title="問題庫" description="大豆的1000個日本問題：1000 題日本旅遊問題的完整清單，每支影片回答一題。">
+  <h1>問題庫：1000 個日本問題</h1>
+  <p>從 LINE 日本旅遊社群裡大家最常問的問題排起，每天一支影片回答一題。目前已上片 <strong>{done}</strong> 題，其餘照預計時間陸續上線。</p>
+
+  <div class="qfilter" role="search">
+    <label>
+      <span>搜尋</span>
+      <input id="q-search" type="search" placeholder="例如：京都、溫泉、JR Pass" />
+    </label>
+    <label>
+      <span>類型</span>
+      <select id="q-type">
+        <option value="">全部類型</option>
+        {types.map(([t, n]) => <option value={t}>{t}（{n}）</option>)}
+      </select>
+    </label>
+    <label>
+      <span>地區</span>
+      <select id="q-area">
+        <option value="">全部地區</option>
+        {areas.map(([a, n]) => <option value={a}>{a}（{n}）</option>)}
+      </select>
+    </label>
+    <label class="check">
+      <input id="q-done" type="checkbox" />
+      <span>只看已上片</span>
+    </label>
+  </div>
+  <p class="qcount" aria-live="polite">顯示 <strong id="q-shown">{questions.length}</strong> / {questions.length} 題</p>
+
+  <ol class="qlist">
+    {questions.map((q) => (
+      <li data-type={q.type} data-area={q.area} data-done={q.status === '已上片' ? '1' : ''} data-text={`${q.id} ${q.title} ${q.type} ${q.area}`.toLowerCase()}>
+        <span class="qno">{q.id}</span>
+        <div class="qmain">
+          <span class="qtitle">{q.title}</span>
+          <span class="qmeta">{q.type}・{q.area}・{q.status === '已上片' ? `${ym(q.date)} 上片` : `預計 ${ym(q.date)}`}</span>
+        </div>
+        {q.video
+          ? <a class="qwatch" href={q.video}>看影片</a>
+          : <span class={`qstat ${q.status === '製作中' ? 'wip' : ''}`}>{q.status}</span>}
+      </li>
+    ))}
+  </ol>
+  <p id="q-empty" class="qempty" hidden>沒有符合的題目。想問的問題不在清單裡？歡迎到聯絡頁告訴我。</p>
+
+  <script>
+    const $ = (id: string) => document.getElementById(id) as HTMLInputElement;
+    const items = [...document.querySelectorAll<HTMLLIElement>('.qlist li')];
+    const run = () => {
+      const s = $('q-search').value.trim().toLowerCase();
+      const t = $('q-type').value, a = $('q-area').value, d = $('q-done').checked;
+      let n = 0;
+      for (const li of items) {
+        const ok = (!s || li.dataset.text!.includes(s)) && (!t || li.dataset.type === t) && (!a || li.dataset.area === a) && (!d || li.dataset.done === '1');
+        li.hidden = !ok; if (ok) n++;
+      }
+      $('q-shown').textContent = String(n);
+      $('q-empty').hidden = n > 0;
+    };
+    ['q-search', 'q-type', 'q-area', 'q-done'].forEach((id) => $(id).addEventListener('input', run));
+  </script>
 </Base>

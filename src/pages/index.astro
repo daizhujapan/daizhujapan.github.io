@@ -3,7 +3,8 @@ import Base from '../layouts/Base.astro';
 import site from '../data/site.json';
 import questions from '../data/questions.json';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-const latest = questions.slice(0, 3);
+const latest = questions.filter((q) => q.status !== '已上片').slice(0, 3);
+const done = questions.filter((q) => q.status === '已上片');
 ---
 <Base>
   <section class="hero">
@@ -32,13 +33,14 @@ const latest = questions.slice(0, 3);
   </section>
 
   <section>
-    <h2>最新題目</h2>
+    <h2>接下來要回答的問題</h2>
+    <p>1000 題已經全部排好，目前已上片 {done.length} 題。<a href={`${base}/questions/`}>看完整問題庫 →</a></p>
     <div class="cards">
       {latest.map((q) => (
         <div class="card">
-          <span class="tag">{q.track}</span>
+          <span class="tag">{q.type}</span>
           <h3>{q.title}</h3>
-          <p>狀態：{q.status}</p>
+          <p>{q.id}・{q.area}・預計 {q.date.replace(/-/g, '/')}</p>
         </div>
       ))}
     </div>
