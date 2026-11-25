@@ -22,8 +22,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     <span id="spot-n"></span>
   </div>
   <ul class="spot-list" id="spot-list"></ul>
-  <p class="note">旗子位置依 OpenStreetMap／國土地理院的地名資料自動定位，並檢查落在該題所屬的縣內；標「縣」的題目沒有單一地點，旗子插在縣的中央。全國性的題目不在地圖上，請到<a href={`${base}/questions/`}>問題庫</a>查。</p>
-  <p class="credit">地圖資料：Natural Earth（公有領域）。地名定位：© OpenStreetMap contributors、國土地理院。3D 繪製：three.js。</p>
+  <p class="note">旗子位置用國土地理院的地名與地址搜尋定位，並檢查落在該題所屬的縣內；標「縣」的題目沒有單一地點，旗子插在縣的中央。全國性的題目不在地圖上，請到<a href={`${base}/questions/`}>問題庫</a>查。</p>
+  <p class="credit">地圖資料：Natural Earth（公有領域）。地名定位：國土地理院 地名・住所檢索。3D 繪製：three.js。</p>
   <script id="spots-data" type="application/json" set:html={JSON.stringify(spots)} />
 </Base>
 
