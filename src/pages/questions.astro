@@ -1,6 +1,9 @@
 ---
 import Base from '../layouts/Base.astro';
 import questions from '../data/questions.json';
+import spots from '../data/spots.json';
+const onMap = new Set(spots.map((s: any) => s.id));
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 const count = (key: 'type' | 'area') => {
   const m = new Map<string, number>();
@@ -44,11 +47,11 @@ const ym = (d: string) => d.slice(0, 7).replace('-', '/');
 
   <ol class="qlist">
     {questions.map((q) => (
-      <li data-type={q.type} data-area={q.area} data-done={q.status === '已上片' ? '1' : ''} data-text={`${q.id} ${q.title} ${q.type} ${q.area}`.toLowerCase()}>
+      <li id={q.id} data-type={q.type} data-area={q.area} data-done={q.status === '已上片' ? '1' : ''} data-text={`${q.id} ${q.title} ${q.type} ${q.area}`.toLowerCase()}>
         <span class="qno">{q.id}</span>
         <div class="qmain">
           <span class="qtitle">{q.title}</span>
-          <span class="qmeta">{q.type}・{q.area}・{q.status === '已上片' ? `${ym(q.date)} 上片` : `預計 ${ym(q.date)}`}</span>
+          <span class="qmeta">{q.type}・{q.area}・{q.status === '已上片' ? `${ym(q.date)} 上片` : `預計 ${ym(q.date)}`}{onMap.has(q.id) && <> ・<a href={`${base}/map/#${q.id}`}>地圖</a></>}</span>
         </div>
         {q.video
           ? <a class="qwatch" href={q.video}>看影片</a>
@@ -73,5 +76,7 @@ const ym = (d: string) => d.slice(0, 7).replace('-', '/');
       $('q-empty').hidden = n > 0;
     };
     ['q-search', 'q-type', 'q-area', 'q-done'].forEach((id) => $(id).addEventListener('input', run));
+    const target = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (target) { target.classList.add('hl'); target.scrollIntoView({ block: 'center' }); }
   </script>
 </Base>

@@ -3,14 +3,10 @@ import Base from '../layouts/Base.astro';
 import spots from '../data/spots.json';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
-<Base title="日本地圖" description="3D 立體日本地圖，影片提到的景點依經緯度自動定位，可旋轉縮放。">
+<Base title="日本地圖" description="3D 立體日本地圖：1000 個日本問題裡提到的景點，依經緯度放在地圖上，可旋轉縮放、搜尋。">
   <h1>日本地圖</h1>
-  <p class="lead">拖曳旋轉、滾輪或雙指縮放、右鍵（或雙指）平移，點旗子看說明。景點依 Google 地圖經緯度自動定位。</p>
-  <div class="legend">
-    <span><i style="background:#d9453b"></i>日本之最</span>
-    <span><i style="background:#2f7dbf"></i>行程攻略</span>
-    <span><i style="background:#e39b21"></i>1000個問題</span>
-  </div>
+  <p class="lead">1000 個問題裡有地點的題目都插上了旗子。拖曳旋轉、滾輪或雙指縮放、右鍵（或雙指）平移；拉近後會出現景點名稱，點旗子看是哪一題。</p>
+  <div class="legend" id="legend" aria-label="依類型顯示或隱藏"></div>
   <div class="j3d" id="j3d" data-geo={`${base}/japan-prefectures.json`}>
     <div class="j3d-loading" id="j3d-loading">正在把日本組起來…</div>
     <div class="j3d-ctrl">
@@ -20,8 +16,14 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     </div>
     <div class="j3d-card" id="j3d-card" hidden></div>
   </div>
+  <div class="spot-find">
+    <label for="spot-q">找景點</label>
+    <input id="spot-q" type="search" placeholder="例如：淺草寺、函館、溫泉" autocomplete="off" />
+    <span id="spot-n"></span>
+  </div>
   <ul class="spot-list" id="spot-list"></ul>
-  <p class="credit">地圖資料：Natural Earth（公有領域）。3D 繪製：three.js。</p>
+  <p class="note">旗子位置依 OpenStreetMap／國土地理院的地名資料自動定位，並檢查落在該題所屬的縣內；標「縣」的題目沒有單一地點，旗子插在縣的中央。全國性的題目不在地圖上，請到<a href={`${base}/questions/`}>問題庫</a>查。</p>
+  <p class="credit">地圖資料：Natural Earth（公有領域）。地名定位：© OpenStreetMap contributors、國土地理院。3D 繪製：three.js。</p>
   <script id="spots-data" type="application/json" set:html={JSON.stringify(spots)} />
 </Base>
 
@@ -37,10 +39,19 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   .j3d-label { font: 700 12px 'Noto Sans TC', sans-serif; color: #2b2b2b; background: #fffaf2; border-radius: 999px; padding: 2px 9px; box-shadow: 0 1px 4px rgba(0,0,0,.2); white-space: nowrap; cursor: pointer; user-select: none; }
   .j3d-label b { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
   .j3d-pref { font: 600 11px 'Noto Sans TC', sans-serif; color: #7b6a52; text-shadow: 0 0 3px #fff, 0 0 3px #fff; pointer-events: none; white-space: nowrap; }
-  .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .9rem; }
-  .legend i { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; margin-right: .3rem; vertical-align: middle; }
+  .legend { display: flex; gap: .5rem; flex-wrap: wrap; font-size: .9rem; }
+  .legend button { display: inline-flex; align-items: center; gap: .35rem; min-height: 36px; border: 1px solid #ddd5c4; background: #fff; border-radius: 999px; padding: .2rem .75rem; cursor: pointer; font: inherit; }
+  .legend button[aria-pressed="false"] { opacity: .45; text-decoration: line-through; }
+  .legend i { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; }
+  .j3d-card a { display: inline-block; margin-top: .4rem; font-weight: 700; }
+  .j3d-card .meta { font-size: .85rem; color: #555; }
+  .spot-find { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .spot-find label { font-weight: 700; }
+  .spot-find input { font: inherit; min-height: 44px; padding: 6px 10px; border: 1px solid #ddd5c4; border-radius: 8px; flex: 1 1 220px; }
+  .spot-find span { color: #666; font-size: .9rem; }
   .spot-list { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: .5rem; }
-  .spot-list button { border: 1px solid #ddd; background: #fff; border-radius: 999px; padding: .3rem .8rem; cursor: pointer; font: inherit; }
+  .spot-list button { border: 1px solid #ddd; background: #fff; border-radius: 999px; padding: .3rem .8rem; min-height: 36px; cursor: pointer; font: inherit; }
+  .note { font-size: .85rem; color: #555; }
   .credit { font-size: .8rem; color: #888; }
 </style>
 
@@ -49,7 +60,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
   import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
-  const COLORS: Record<string, string> = { '日本之最': '#d9453b', '行程攻略': '#2f7dbf', '1000個問題': '#e39b21' };
+  const COLORS: Record<string, string> = {
+    '景點介紹': '#2f7d5b', '之最知識': '#d9453b', '實拍景點': '#7a3fb0', '行程規劃': '#2f7dbf', '實用攻略': '#1f5f8b',
+    '季節活動': '#d6608f', '美食': '#e39b21', '文化生活': '#a07b2c', '歷史故事': '#6b5a45', '特別企劃': '#333333',
+  };
   // 依地方區分的柔和配色（低多邊形可愛風）
   const REGION: [string, string[]][] = [
     ['#cfe3b4', ['Hokkaido', 'Hokkaidō']],
@@ -136,7 +150,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     const prefOf = (lat: number, lng: number) => geo.features.find((f: any) => f.geometry.coordinates.some((p: any) => inRing(p[0], lng, lat)));
 
     const H_LAND = 0.22, H_HOT = 0.34;
-    const hot = new Set(placed.map((p) => prefOf(p.ll[0], p.ll[1])?.properties.name).filter(Boolean));
+    const hot = new Set(placed.filter((p) => p.s.video).map((p) => prefOf(p.ll[0], p.ll[1])?.properties.name).filter(Boolean));
     const prefLabels: CSS2DObject[] = [];
     const land = new THREE.Group(); scene.add(land);
 
@@ -208,35 +222,48 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       clouds.push(c); scene.add(c);
     }
 
-    // 景點旗子
-    const pins: { obj: THREE.Group; s: any; ll: [number, number]; base: number }[] = [];
-    const pinHit: THREE.Object3D[] = [];
-    const pinLabels: CSS2DObject[] = [];
-    for (const p of placed) {
-      const pref = prefOf(p.ll[0], p.ll[1]);
-      const baseY = pref ? (hot.has(pref.properties.name) ? H_HOT : H_LAND) + 0.03 : 0.02;
-      const col = new THREE.Color(COLORS[p.s.track] || '#555');
-      const grp = new THREE.Group();
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.36, 6), new THREE.MeshStandardMaterial({ color: 0x6b5a45 }));
-      pole.position.y = 0.18; grp.add(pole);
-      const flagShape = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0.17, -0.055), new THREE.Vector2(0, -0.11)]);
-      const flag = new THREE.Mesh(new THREE.ExtrudeGeometry(flagShape, { depth: 0.012, bevelEnabled: false }), new THREE.MeshStandardMaterial({ color: col, flatShading: true }));
-      flag.position.set(0.008, 0.36, -0.006); grp.add(flag);
-      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), new THREE.MeshStandardMaterial({ color: 0xfff2d6 }));
-      knob.position.y = 0.37; grp.add(knob);
-      const hit = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
-      hit.position.y = 0.25; hit.userData.spot = p.s; grp.add(hit); pinHit.push(hit);
-      grp.traverse((o: any) => { if (o.isMesh) o.castShadow = true; });
-      grp.position.set(px(p.ll[1]), baseY, pz(p.ll[0]));
-      scene.add(grp);
+    // 景點旗子：1000 支旗用 InstancedMesh 一次畫完
+    let labelsDirty = true, frame = 0, lastDist = -1; const lastTarget = new THREE.Vector3(1e9, 0, 0);
+    const N = placed.length;
+    const poleGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.36, 6); poleGeo.translate(0, 0.18, 0);
+    const flagGeo = new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0.17, -0.055), new THREE.Vector2(0, -0.11)]), { depth: 0.012, bevelEnabled: false });
+    flagGeo.translate(0.008, 0.36, 0);
+    const knobGeo = new THREE.SphereGeometry(0.02, 8, 6); knobGeo.translate(0, 0.37, 0);
+    const hitGeo = new THREE.SphereGeometry(0.12, 6, 4); hitGeo.translate(0, 0.25, 0);
+    const poles = new THREE.InstancedMesh(poleGeo, new THREE.MeshStandardMaterial({ color: 0x6b5a45 }), N);
+    const flags = new THREE.InstancedMesh(flagGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true }), N);
+    const knobs = new THREE.InstancedMesh(knobGeo, new THREE.MeshStandardMaterial({ color: 0xfff2d6 }), N);
+    const hits = new THREE.InstancedMesh(hitGeo, new THREE.MeshBasicMaterial({ visible: false }), N);
+    flags.castShadow = poles.castShadow = true;
+    scene.add(poles, flags, knobs, hits);
 
+    type Pin = { s: any; ll: [number, number]; base: number; big: boolean; on: boolean; lab: CSS2DObject; i: number };
+    const pins: Pin[] = [];
+    placed.forEach((p, i) => {
+      const pref = prefOf(p.ll[0], p.ll[1]);
+      const base = pref ? (hot.has(pref.properties.name) ? H_HOT : H_LAND) + 0.03 : 0.02;
+      flags.setColorAt(i, new THREE.Color(COLORS[p.s.type] || '#555'));
       const el = document.createElement('div'); el.className = 'j3d-label';
-      const dot = document.createElement('b'); dot.style.background = COLORS[p.s.track] || '#555';
+      const dot = document.createElement('b'); dot.style.background = COLORS[p.s.type] || '#555';
       el.append(dot, document.createTextNode(p.s.name));
       el.style.pointerEvents = 'auto';
-      el.addEventListener('click', (e) => { e.stopPropagation(); focusSpot(p); });
-      const lab = new CSS2DObject(el); lab.position.set(0, 0.5, 0); grp.add(lab); pinLabels.push(lab);
-      pins.push({ obj: grp, s: p.s, ll: p.ll, base: baseY });
+      const lab = new CSS2DObject(el); lab.visible = false; scene.add(lab);
+      const pin: Pin = { s: p.s, ll: p.ll, base, big: !!p.s.video, on: true, lab, i };
+      el.addEventListener('click', (e) => { e.stopPropagation(); focusSpot(pin); });
+      pins.push(pin);
+    });
+    if (flags.instanceColor) flags.instanceColor.needsUpdate = true;
+    const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3(), tmpP = new THREE.Vector3();
+    let lastScale = -1;
+    function placePins(s: number) {
+      for (const p of pins) {
+        const k = p.on ? s * (p.big ? 1.6 : 1) : 0;
+        tmpP.set(px(p.ll[1]), p.base, pz(p.ll[0])); tmpS.setScalar(k);
+        tmpM.compose(tmpP, tmpQ, tmpS);
+        poles.setMatrixAt(p.i, tmpM); flags.setMatrixAt(p.i, tmpM); knobs.setMatrixAt(p.i, tmpM); hits.setMatrixAt(p.i, tmpM);
+        p.lab.position.set(tmpP.x, tmpP.y + 0.45 * k, tmpP.z);
+      }
+      for (const m of [poles, flags, knobs, hits]) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); }
     }
 
     // 鏡頭控制
@@ -255,16 +282,22 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       anim = { t0: performance.now(), dur, fp: camera.position.clone(), ft: controls.target.clone(), tp, tt };
     }
     function focusSpot(p: { s: any; ll: [number, number] }, dur = 900) {
+      labelsDirty = true;
       const t = new THREE.Vector3(px(p.ll[1]), 0.2, pz(p.ll[0]));
       flyTo(t.clone().add(new THREE.Vector3(-0.4, 2.6, 2.2)), t, dur);
       show(p.s);
     }
+    const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
     function show(s: any) {
       card.replaceChildren();
-      const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = s.track; tag.style.background = COLORS[s.track] || '#555';
-      const b = document.createElement('strong'); b.textContent = s.name;
-      const p = document.createElement('div'); p.textContent = s.note + (s.qid ? `（${s.qid}）` : '');
-      card.append(tag, b, p); card.hidden = false;
+      const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = s.type; tag.style.background = COLORS[s.type] || '#555';
+      const b = document.createElement('strong'); b.textContent = s.title;
+      const m = document.createElement('div'); m.className = 'meta';
+      m.textContent = `${s.id}・${s.name}${s.level === 'area' ? '（縣）' : ''}・` + (s.video ? '已上片' : `預計 ${s.date.slice(0, 7).replace('-', '/')}`);
+      const a = document.createElement('a');
+      if (s.video) { a.href = s.video; a.textContent = '看影片 →'; }
+      else { a.href = `${BASE}/questions/#${s.id}`; a.textContent = '在問題庫看這題 →'; }
+      card.append(tag, b, m, a); card.hidden = false;
     }
 
     wrap.querySelectorAll<HTMLButtonElement>('.j3d-ctrl button').forEach((b) => b.addEventListener('click', () => {
@@ -284,27 +317,76 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       const r = renderer.domElement.getBoundingClientRect();
       mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       ray.setFromCamera(mouse, camera);
-      const hit = ray.intersectObjects(pinHit, false)[0];
-      if (hit) { const p = pins.find((q) => q.s === hit.object.userData.spot)!; focusSpot(p); }
+      const hit = ray.intersectObject(hits, false).find((h) => h.instanceId !== undefined && pins[h.instanceId!].on);
+      if (hit) focusSpot(pins[hit.instanceId!]);
       else card.hidden = true;
     });
 
-    const list = document.getElementById('spot-list')!;
-    for (const p of pins) {
-      const li = document.createElement('li'); const btn = document.createElement('button');
-      btn.textContent = p.s.name; btn.addEventListener('click', () => { focusSpot(p); wrap.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
-      li.append(btn); list.append(li);
+    // 圖例：點一下隱藏／顯示該類型
+    const legend = document.getElementById('legend')!;
+    const counts = new Map<string, number>();
+    for (const p of pins) counts.set(p.s.type, (counts.get(p.s.type) ?? 0) + 1);
+    const hidden = new Set<string>();
+    for (const [type, n] of [...counts].sort((a, b) => b[1] - a[1])) {
+      const btn = document.createElement('button'); btn.type = 'button'; btn.setAttribute('aria-pressed', 'true');
+      const i = document.createElement('i'); i.style.background = COLORS[type] || '#555';
+      btn.append(i, document.createTextNode(`${type} ${n}`));
+      btn.addEventListener('click', () => {
+        if (hidden.has(type)) hidden.delete(type); else hidden.add(type);
+        btn.setAttribute('aria-pressed', String(!hidden.has(type)));
+        for (const p of pins) p.on = !hidden.has(p.s.type);
+        lastScale = -1; labelsDirty = true;
+      });
+      legend.append(btn);
     }
 
-    // 網址加 #景點名稱 會直接飛到該景點，例如 /map/#清水寺
+    // 找景點
+    const list = document.getElementById('spot-list')!, qIn = document.getElementById('spot-q') as HTMLInputElement, qN = document.getElementById('spot-n')!;
+    function renderList() {
+      const s = qIn.value.trim().toLowerCase();
+      const found = s ? pins.filter((p) => `${p.s.id} ${p.s.name} ${p.s.title} ${p.s.area}`.toLowerCase().includes(s)) : pins.filter((p) => p.big);
+      qN.textContent = s ? `找到 ${found.length} 個` : `地圖上共 ${pins.length} 個景點；先列出已上片的`;
+      list.replaceChildren(...found.slice(0, 40).map((p) => {
+        const li = document.createElement('li'); const btn = document.createElement('button'); btn.type = 'button';
+        btn.textContent = p.s.name; btn.title = p.s.title;
+        btn.addEventListener('click', () => { focusSpot(p); wrap.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+        li.append(btn); return li;
+      }));
+    }
+    qIn.addEventListener('input', renderList); renderList();
+
+    // 網址加 #景點名稱 或 #題號 會直接飛到該景點，例如 /map/#清水寺、/map/#Q054
     const want = decodeURIComponent(location.hash.slice(1));
-    const hitSpot = pins.find((p) => p.s.name === want);
+    const hitSpot = pins.find((p) => p.s.name === want || p.s.id === want);
     if (hitSpot) focusSpot(hitSpot, 0);
 
     new ResizeObserver(() => {
       renderer.setSize(W(), H()); labelR.setSize(W(), H());
       camera.aspect = W() / H(); camera.updateProjectionMatrix();
     }).observe(wrap);
+
+    // 標籤：只顯示畫面內、離中心近的前幾個，彼此不重疊（已上片的優先）
+    const v = new THREE.Vector3();
+    function pickLabels(dist: number) {
+      const w = W(), h = H(), max = dist < 3 ? 40 : dist < 9 ? 24 : 10;
+      const cand: { p: Pin; x: number; y: number; d: number }[] = [];
+      for (const p of pins) {
+        p.lab.visible = false;
+        if (!p.on) continue;
+        v.copy(p.lab.position).project(camera);
+        if (v.z > 1 || Math.abs(v.x) > 1 || Math.abs(v.y) > 1) continue;
+        cand.push({ p, x: (v.x + 1) * w / 2, y: (1 - v.y) * h / 2, d: Math.hypot(v.x, v.y) - (p.big ? 10 : 0) });
+      }
+      cand.sort((a, b) => a.d - b.d);
+      const boxes: number[][] = [];
+      for (const c of cand) {
+        if (boxes.length >= max) break;
+        const half = (c.p.s.name.length * 12 + 26) / 2;
+        const r = [c.x - half, c.y - 14, c.x + half, c.y + 14];
+        if (boxes.some((b) => r[0] < b[2] && r[2] > b[0] && r[1] < b[3] && r[3] > b[1])) continue;
+        boxes.push(r); c.p.lab.visible = true;
+      }
+    }
 
     const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
     renderer.setAnimationLoop((now) => {
@@ -319,21 +401,12 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       // 縣名只在拉近時出現，景點標籤在很遠時縮小
       for (const l of prefLabels) l.visible = dist < 9;
       for (const c of clouds) { c.position.x += 0.0015; if (c.position.x > 14) c.position.x = -14; c.visible = dist > 6; }
-      for (const p of pins) {
-        p.obj.position.y = p.base + Math.sin(now / 600 + p.ll[1]) * 0.015;
-        const s = THREE.MathUtils.clamp(dist / 8, 0.6, 3.2);
-        p.obj.scale.setScalar(s);
-      }
+      const s = THREE.MathUtils.clamp(dist / 12, 0.35, 2.4);
+      if (Math.abs(s - lastScale) > 0.01) { placePins(s); lastScale = s; labelsDirty = true; }
+      if (controls.target.distanceTo(lastTarget) > 0.01 || Math.abs(dist - lastDist) > 0.01) { labelsDirty = true; lastTarget.copy(controls.target); lastDist = dist; }
+      if (labelsDirty && ++frame % 6 === 0) { pickLabels(dist); labelsDirty = false; }
       renderer.render(scene, camera);
       labelR.render(scene, camera);
-      // 標籤重疊時，只留一個（避免京都幾個點擠在一起）
-      const boxes: DOMRect[] = [];
-      for (const l of pinLabels) {
-        l.element.style.visibility = 'visible';
-        const r = l.element.getBoundingClientRect();
-        if (boxes.some((b) => r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top)) l.element.style.visibility = 'hidden';
-        else boxes.push(r);
-      }
     });
   }
 </script>
